@@ -7,14 +7,114 @@ class EBD(nn.Module):
         self.word_ebd = nn.Embedding(28, 24)
         self.pos_ebd = nn.Embedding(12, 24)
         self.pos_t = torch.arange(0, 12).reshape(1, 12)
+        #将词编码后转换为词向量，然后再对位置进行编码，这里采用简单的方法来编码
 
     def forward(self, X:torch.tensor):
         return self.word_ebd(X) + self.pos_ebd(self.pos_t)
+        #更改了词向量的位置，让他保存了前面的信息
+
+def attention(Q, K, V):
+    A = Q @ K.transpose(-1, -2) / (Q.shape[-1] ** 0.5)
+    A = torch.softmax(A, dim = -1)
+    O = A @ V
+    return O
+    #注意力相乘
+
+def transpose_qkv(QKV):
+    QKV = QKV.reshape(QKV.shape[0], QKV.shape[1], 4, 6)
+    QKV = QKV.transpose(-2, -3)
+    return QKV
+    #多头注意力机制
+
+def transpost_o(O):
+    O = O.transpose(-2, -3)
+    O = O.reshape(O.shape[0], O.shape[1], 24)
+    return O
+    #转换回原来的维度
+
+class Attention_block(nn.Module):
+    def __init__(self):
+        super(Attention_block, self).__init__()
+        self.Wq = nn.Linear(24, 24, bias=False)
+        self.Wk = nn.Linear(24, 24, bias=False)
+        self.Wv = nn.Linear(24, 24, bias=False)
+        self.Wo = nn.Linear(24, 24, bias=False)
+        #里面的qkv均为可学习参数
+
+    def forward(self, X):
+        Q, K, V = self.Wq(X), self.Wk(X), self.Wv(X)
+        Q, K, V = transpose_qkv(Q), transpose_qkv(K), transpose_qkv(V)
+        O = attention(Q, K, V)
+        O = transpost_o(O)
+        O = self.Wo(O)
+        return O
+
+class AddNorm(nn.Module):
+    def __init__(self):
+        super(AddNorm, self).__init__()
+        self.add_norm = nn.LayerNorm(24)
+        self.dropout = nn.Dropout(0.1)
+        #防止过拟合
+
+    def forward(self, X, X1):
+        X += X1
+        X = self.add_norm(X)
+        X = self.dropout(X)
+        return X
+        #类比了残差网络，同时还归一化
+
+class Pos_FNN(nn.Module):
+    def __init__(self):
+        super(Pos_FNN, self).__init__()
+        self.lin_1 = nn.Linear(24, 48)
+        self.relu_1 = nn.ReLU()
+        self.lin_2 = nn.Linear(48, 24)
+        self.relu_2 = nn.ReLU()
+
+    def forward(self, X):
+        X = self.lin_1(X)
+        X = self.relu_1(X)
+        X = self.lin_2(X)
+        X = self.relu_2(X)
+        return X
+        #实现前馈网络
+
+class Encoder_block(nn.Module):
+    def __init__(self):
+        super(Encoder_block, self).__init__()
+        self.attention = Attention_block()
+        self.add_norm_1 = AddNorm()
+        self.FNN = Pos_FNN()
+        self.add_norm_2 = AddNorm()
+
+    def forward(self, X):
+        X_1 = self.attention(X)
+        X = self.add_norm_1(X, X_1)
+        X_1 = self.FNN(X)
+        X = self.add_norm_2(X, X_1)
+        return X
+
+class Encoder(nn.Module):
+    def __init__(self):
+        super(Encoder, self).__init__()
+        self.ebd = EBD()
+        self.encoder_blks = nn.Sequential()
+        self.encoder_blks.append(Encoder_block())
+        self.encoder_blks.append(Encoder_block())
+
+    def forward(self, X):
+        X = self.ebd(X)
+        for encoder_blk in self.encoder_blks:
+            X = encoder_blk(X)
+        return X
 
 if __name__ == "__main__" :
     a = torch.ones((2,12)).long()
-    ebd = EBD()
-    b = ebd(a)
-    print(b.shape)
-
+    # ebd = EBD()
+    # b = ebd(a)
+    # att = Attention_block()
+    # c = att(b)
+    # pass
+    encoder = Encoder(a)
+    b = encoder(a)
     pass
