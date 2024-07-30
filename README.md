@@ -1,1 +1,2 @@
 # transformer
+我自己实现了一个transformer的模块，根据B站上的学不会电磁场的大佬一步一步实现的，从attention到多头注意力再到encoder与decoder，最后搭建起来了一个transformer
