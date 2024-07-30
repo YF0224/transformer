@@ -128,7 +128,7 @@ class CrossAttention_block(nn.Module):
 class Decoder_blk(nn.Module):
     def __init__(self):
         super(Decoder_blk, self).__init__()
-        self.attention = Attention_block()
+        self.attention = Attention_block()#跟encoder里面的注意力一样
         self.add_norm_1 = AddNorm()
         self.cross_attention = CrossAttention_block()#这里的多头注意力跟attention_block不一样，接收的不止有ebd之后的X，还有编码器编码后的X_en
         self.add_norm_2 = AddNorm()
@@ -147,11 +147,11 @@ class Decoder_blk(nn.Module):
 class Decoder(nn.Module):
     def __init__(self):
         super(Decoder, self).__init__()
-        self.ebd = EBD()
+        self.ebd = EBD()#先进行编码
         self.decoder_blks = nn.Sequential()
         self.decoder_blks.append(Decoder_blk())
         self.decoder_blks.append(Decoder_blk())
-        self.dense = nn.Linear(24, 28, bias=False)
+        self.dense = nn.Linear(24, 28, bias=False)#将他能够映射到28个字符里面
 
     def forward(self, X, X_en):
         X = self.ebd(X)
