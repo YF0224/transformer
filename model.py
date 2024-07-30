@@ -10,7 +10,7 @@ class EBD(nn.Module):
         #将词编码后转换为词向量，然后再对位置进行编码，这里采用简单的方法来编码
 
     def forward(self, X:torch.tensor):
-        return self.word_ebd(X) + self.pos_ebd(self.pos_t)
+        return self.word_ebd(X) + self.pos_ebd(self.pos_t[:, :X.shape[-1]])#长度不一定是12
         #更改了词向量的位置，让他保存了前面的信息
 
 def attention(Q, K, V):
@@ -141,7 +141,7 @@ class Decoder_blk(nn.Module):
         X_1 = self.cross_attention(X, X_en)
         X = self.add_norm_2(X, X_1)
         X_1 = self.FNN(X)
-        X = self.add_norm_3(X_1)
+        X = self.add_norm_3(X, X_1)
         return X
 
 class Decoder(nn.Module):
@@ -157,17 +157,23 @@ class Decoder(nn.Module):
         X = self.ebd(X)
         for layer in self.decoder_blks:
             X = layer(X, X_en)
+        X = self.dense(X)
         return X
 
+class Transformer(nn.Module):
+    def __init__(self):
+        super(Transformer, self).__init__()
+        self.encoder = Encoder()
+        self.decoder = Decoder()
 
+    def forward(self, X_s, X_t):
+        X_en = self.encoder(X_s)
+        X = self.decoder(X_t, X_en)
+        return X
 
 if __name__ == "__main__" :
-    a = torch.ones((2,12)).long()
-    # ebd = EBD()
-    # b = ebd(a)
-    # att = Attention_block()
-    # c = att(b)
-    # pass
-    encoder = Encoder(a)
-    b = encoder(a)
+    a = torch.ones((2, 12)).long()
+    b = torch.ones((2, 1)).long()
+    model = Transformer()
+    o = model(a, b)
     pass
