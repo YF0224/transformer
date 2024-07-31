@@ -4,7 +4,7 @@ from torch import nn
 class EBD(nn.Module):
     def __init__(self):
         super(EBD, self).__init__()
-        self.word_ebd = nn.Embedding(28, 24)
+        self.word_ebd = nn.Embedding(29, 24)
         self.pos_ebd = nn.Embedding(12, 24)
         self.pos_t = torch.arange(0, 12).reshape(1, 12)
         #将词编码后转换为词向量，然后再对位置进行编码，这里采用简单的方法来编码
