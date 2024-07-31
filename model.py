@@ -13,8 +13,10 @@ class EBD(nn.Module):
         return self.word_ebd(X) + self.pos_ebd(self.pos_t[:, :X.shape[-1]])#长度不一定是12
         #更改了词向量的位置，让他保存了前面的信息
 
-def attention(Q, K, V):
+def attention(Q, K, V, M:torch.tensor):
     A = Q @ K.transpose(-1, -2) / (Q.shape[-1] ** 0.5)
+    M = M.unsqueeze(1)
+    A.masked_fill(M == 0, -torch.tensor(float('inf')))
     A = torch.softmax(A, dim = -1)
     O = A @ V
     return O
@@ -41,10 +43,10 @@ class Attention_block(nn.Module):
         self.Wo = nn.Linear(24, 24, bias=False)
         #里面的qkv均为可学习参数
 
-    def forward(self, X):
+    def forward(self, X, M:torch.tensor):
         Q, K, V = self.Wq(X), self.Wk(X), self.Wv(X)
         Q, K, V = transpose_qkv(Q), transpose_qkv(K), transpose_qkv(V)
-        O = attention(Q, K, V)
+        O = attention(Q, K, V, M)
         O = transpost_o(O)
         O = self.Wo(O)
         return O
@@ -87,8 +89,9 @@ class Encoder_block(nn.Module):
         self.FNN = Pos_FNN()
         self.add_norm_2 = AddNorm()
 
-    def forward(self, X):
-        X_1 = self.attention(X)
+    def forward(self, X, I_m):
+        I_m = I_m.unsqueeze(-2)
+        X_1 = self.attention(X, I_m)
         X = self.add_norm_1(X, X_1)
         X_1 = self.FNN(X)
         X = self.add_norm_2(X, X_1)
@@ -102,10 +105,10 @@ class Encoder(nn.Module):
         self.encoder_blks.append(Encoder_block())
         self.encoder_blks.append(Encoder_block())
 
-    def forward(self, X):
+    def forward(self, X, I_m):
         X = self.ebd(X)
         for encoder_blk in self.encoder_blks:
-            X = encoder_blk(X)
+            X = encoder_blk(X, I_m)
         return X
 
 class CrossAttention_block(nn.Module):
@@ -117,10 +120,10 @@ class CrossAttention_block(nn.Module):
         self.Wo = nn.Linear(24, 24, bias=False)
         #里面的qkv均为可学习参数
 
-    def forward(self, X, X_en):
+    def forward(self, X, X_en, I_m):
         Q, K, V = self.Wq(X), self.Wk(X_en), self.Wv(X_en)
         Q, K, V = transpose_qkv(Q), transpose_qkv(K), transpose_qkv(V)
-        O = attention(Q, K, V)
+        O = attention(Q, K, V, I_m)
         O = transpost_o(O)
         O = self.Wo(O)
         return O
@@ -134,15 +137,19 @@ class Decoder_blk(nn.Module):
         self.add_norm_2 = AddNorm()
         self.FNN = Pos_FNN()
         self.add_norm_3 = AddNorm()
+        mask_matrix = torch.ones(12, 12)
+        self.tril_mask = torch.tril(mask_matrix).unsqueeze(0)
 
-    def forward(self, X, X_en):
-        X_1 = self.attention(X)
-        X = self.add_norm_1(X, X_1)
-        X_1 = self.cross_attention(X, X_en)
-        X = self.add_norm_2(X, X_1)
-        X_1 = self.FNN(X)
-        X = self.add_norm_3(X, X_1)
-        return X
+    def forward(self, X_t, O_m, X_en, I_m):
+        O_m = O_m.unsqueeze(-2)
+        I_m = I_m.unsqueeze(-2)
+        X_1 = self.attention(X_t, O_m * self.tril_mask[:, :O_m.shape[-1], :O_m.shpe[-1]])
+        X_t = self.add_norm_1(X_t, X_1)
+        X_1 = self.cross_attention(X_t, X_en, I_m)
+        X_t = self.add_norm_2(X_t, X_1)
+        X_1 = self.FNN(X_t)
+        X_t = self.add_norm_3(X_t, X_1)
+        return X_t
 
 class Decoder(nn.Module):
     def __init__(self):
@@ -153,12 +160,12 @@ class Decoder(nn.Module):
         self.decoder_blks.append(Decoder_blk())
         self.dense = nn.Linear(24, 28, bias=False)#将他能够映射到28个字符里面
 
-    def forward(self, X, X_en):
-        X = self.ebd(X)
+    def forward(self, X_t, O_m, X_en, I_m):
+        X_t = self.ebd(X_t)
         for layer in self.decoder_blks:
-            X = layer(X, X_en)
-        X = self.dense(X)
-        return X
+            X = layer(X_t, O_m, X_en, I_m)
+        X_t = self.dense(X_t)
+        return X_t
 
 class Transformer(nn.Module):
     def __init__(self):
@@ -166,9 +173,9 @@ class Transformer(nn.Module):
         self.encoder = Encoder()
         self.decoder = Decoder()
 
-    def forward(self, X_s, X_t):
-        X_en = self.encoder(X_s)
-        X = self.decoder(X_t, X_en)
+    def forward(self, X_s, I_m, X_t, O_m):
+        X_en = self.encoder(X_s, I_m)
+        X = self.decoder(X_t, O_m, X_en, I_m)
         return X
 
 if __name__ == "__main__" :
