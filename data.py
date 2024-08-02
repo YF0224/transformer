@@ -25,7 +25,7 @@ def process_data(source, target):
         source_id += [vocab_list.index("[PAD]")] * pad_len
         source_m[-pad_len:] = 0
     if len(target_id) < max_length + 1:
-        pad_len = max_length - len(source_id) + 1
+        pad_len = max_length - len(target_id) + 1
         target_id += [vocab_list.index("[PAD]")] * pad_len
         target_m[-pad_len:] = 0
     return source_id, source_m, target_id, target_m
@@ -35,11 +35,13 @@ class MyDataset(Dataset):
         super().__init__()
         self.source_list = []
         self.target_list = []
-        with open(source_path, 'r') as f:
-            for line in f:
+        with open(source_path) as f:
+            content = f.readlines()
+            for line in content:
                 self.source_list.append(deepcopy(line.strip()))
-        with open(target_path, 'r') as f:
-            for line in f:
+        with open(target_path) as f:
+            content = f.readlines()
+            for line in content:
                 self.target_list.append(deepcopy(line.strip()))
 
     def __len__(self):
@@ -47,7 +49,7 @@ class MyDataset(Dataset):
 
     def __getitem__(self, index):
         source_id, source_m, target_id, target_m =process_data(self.source_list[index], self.target_list[index])
-        return torch.tensor(source_id, dtype=torch.long), torch.tensor(source_m, dtype=torch.long), torch.tensor(target_id, dtype=torch.long), torch.tensor(target_m, dtype=torch.long)
+        return (torch.tensor(source_id, dtype=torch.long), torch.tensor(source_m, dtype=torch.long), torch.tensor(target_id, dtype=torch.long), torch.tensor(target_m, dtype=torch.long))
 
 if __name__ == "__main__":
     test_data = MyDataset("source.txt", "target.txt")

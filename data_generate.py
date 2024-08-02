@@ -14,10 +14,10 @@ with open(source_path, 'w') as f:
 with open(target_path, 'w') as f:
     pass
 
-for _ in range(1000):
+for _ in range(10000):
     source_str = ""
     target_str = ""
-    for idx in range(random.randint(3, 13)):
+    for idx in range(random.randint(3, 10)):
         i = random.randint(0,25)
         source_str += char_list[i]
         target_str += char_list[(i + 26 - 5) % 26]
